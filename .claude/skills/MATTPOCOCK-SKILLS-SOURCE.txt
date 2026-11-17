@@ -1,0 +1,3 @@
+Source: https://github.com/mattpocock/skills at commit 5863806 (installed 2026-11-12).
+Installed: grill-me grilling tdd diagnosing-bugs prototype codebase-design handoff teach to-questionnaire wait-what writing-for-agents
+Update by re-cloning and re-reading each SKILL.md before copying.
