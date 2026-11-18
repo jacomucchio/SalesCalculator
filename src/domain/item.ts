@@ -1,4 +1,4 @@
-import { PLATFORMS, STATUSES, type Item, type Platform, type Registry } from './types'
+import { PLATFORMS, STATUSES, UNSOLD_STATUSES, type Item, type Platform, type Registry } from './types'
 
 export type ItemErrors = Partial<Record<keyof Item, string>>
 
@@ -16,6 +16,7 @@ export function parseEuro(input: string): number | null {
 export function normalizeItem(item: Item): Item {
   const out: Item = { ...item, name: item.name.trim() }
   if (out.status !== 'in_vendita') out.listPrice = null
+  if (!UNSOLD_STATUSES.includes(out.status)) out.estimatedPrice = null
   if (out.status !== 'venduto') {
     out.salePrice = null
     out.saleDate = null
@@ -35,6 +36,7 @@ export function validateItem(item: Item): ItemErrors {
 
   if (item.status === 'in_vendita' && item.listPrice !== null && item.listPrice < 0)
     errors.listPrice = 'Prezzo non valido'
+  if (item.estimatedPrice !== null && !(item.estimatedPrice >= 0)) errors.estimatedPrice = 'Valore non valido'
 
   if (item.status === 'venduto') {
     if (item.salePrice === null || !Number.isFinite(item.salePrice) || item.salePrice < 0)
@@ -66,12 +68,15 @@ export function parseRegistry(text: string): Registry {
   const reg = data as Partial<Registry>
   if (reg?.version !== 1 || !Array.isArray(reg.items)) throw new Error('Formato del file non riconosciuto')
   reg.items.forEach((it, i) => {
+    // Files written before the estimated value existed lack the field.
+    if (it && it.estimatedPrice === undefined) it.estimatedPrice = null
     const ok =
       typeof it?.id === 'string' &&
       typeof it.name === 'string' &&
       typeof it.purchasePrice === 'number' &&
       STATUSES.includes(it.status) &&
       isNum(it.listPrice) &&
+      isNum(it.estimatedPrice) &&
       isNum(it.salePrice) &&
       isDate(it.purchaseDate) &&
       isDate(it.saleDate) &&
@@ -89,6 +94,7 @@ export function newItem(today: string): Item {
     purchaseDate: today,
     status: 'in_magazzino',
     listPrice: null,
+    estimatedPrice: null,
     salePrice: null,
     saleDate: null,
     platform: null,

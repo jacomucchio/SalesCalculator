@@ -23,6 +23,8 @@ export interface Item {
   status: Status
   /** Asking price, only meaningful while status is `in_vendita` */
   listPrice: number | null
+  /** Expected sale value, only meaningful while the item is unsold (in magazzino / in vendita) */
+  estimatedPrice: number | null
   /** Amount actually received */
   salePrice: number | null
   saleDate: IsoDate | null

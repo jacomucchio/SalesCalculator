@@ -46,8 +46,13 @@ export function Dashboard({ items, onOpen }: { items: Item[]; onOpen: (item: Ite
           </CardContent>
         </Card>
         <Stat label="Saldo di cassa" value={eurSigned(s.cashBalance)} valueClass={profitClass(s.cashBalance)} hint={`Vendite ${eur(s.totalSales)} − acquisti ${eur(s.totalPurchases)}`} />
-        <Stat label="Valore inventario" value={eur(s.inventoryValue)} hint={`${s.stockCount} articoli non ancora venduti`} />
-        <Stat label="Profitto potenziale" value={eurSigned(s.potentialProfit)} valueClass={profitClass(s.potentialProfit)} hint="Prezzo annuncio − acquisto, articoli in vendita" />
+        <Stat label="Valore inventario" value={eur(s.inventoryValue)} hint={`Costo di ${s.stockCount} articoli · stimato ${eur(s.expectedValue)}`} />
+        <Stat
+          label="Profitto potenziale"
+          value={eurSigned(s.potentialProfit)}
+          valueClass={profitClass(s.potentialProfit)}
+          hint={`Valore stimato − acquisto${s.unvaluedCount ? ` · ${s.unvaluedCount} articoli senza stima` : ''}`}
+        />
         <Stat label="Totale vendite" value={eur(s.totalSales)} hint={`${s.soldCount} articoli`} />
         <Stat label="Totale acquisti" value={eur(s.totalPurchases)} hint="Tutti gli stati" />
         <Stat label="Giorni medi per vendere" value={s.avgDaysToSell === null ? '—' : String(s.avgDaysToSell)} hint="Dall’acquisto alla vendita" />

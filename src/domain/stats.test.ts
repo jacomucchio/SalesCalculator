@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { availableYears, computeSummary, daysBetween, itemProfit, monthlyProfit, staleItems } from './stats'
+import { availableYears, computeSummary, daysBetween, expectedSalePrice, itemProfit, monthlyProfit, staleItems } from './stats'
 import type { Item } from './types'
 
 let n = 0
@@ -10,6 +10,7 @@ const item = (over: Partial<Item>): Item => ({
   purchaseDate: '2026-01-01',
   status: 'in_magazzino',
   listPrice: null,
+  estimatedPrice: null,
   salePrice: null,
   saleDate: null,
   platform: null,
@@ -48,8 +49,21 @@ describe('computeSummary', () => {
     expect(s.cashBalance).toBe(-85)
     expect(s.inventoryValue).toBe(55)
     expect(s.potentialProfit).toBe(25)
+    expect(s.expectedValue).toBe(45)
+    expect(s.unvaluedCount).toBe(2)
     expect(s.soldCount).toBe(2)
     expect(s.stockCount).toBe(3)
+  })
+
+  it('uses the estimated value, also for items still in stock', () => {
+    const s = computeSummary([
+      ...items,
+      item({ purchasePrice: 10, status: 'in_magazzino', estimatedPrice: 30 }), // +20
+      item({ purchasePrice: 10, status: 'in_vendita', listPrice: 50, estimatedPrice: 40 }), // estimate wins: +30
+    ])
+    expect(s.expectedValue).toBe(115)
+    expect(s.potentialProfit).toBe(75)
+    expect(s.unvaluedCount).toBe(2)
   })
 
   it('computes weighted margin and average days to sell', () => {
@@ -124,5 +138,14 @@ describe('helpers', () => {
   })
   it('lists years from both dates, newest first', () => {
     expect(availableYears([sold(1, 2, '2025-12-01', '2026-01-01'), item({ purchaseDate: null })])).toEqual([2026, 2025])
+  })
+})
+
+describe('expectedSalePrice', () => {
+  it('prefers the estimate, falls back to the list price, ignores sold and kept items', () => {
+    expect(expectedSalePrice(item({ status: 'in_vendita', listPrice: 50, estimatedPrice: 40 }))).toBe(40)
+    expect(expectedSalePrice(item({ status: 'in_vendita', listPrice: 50 }))).toBe(50)
+    expect(expectedSalePrice(item({ status: 'in_magazzino' }))).toBeNull()
+    expect(expectedSalePrice(item({ status: 'tenuto', estimatedPrice: 40 }))).toBeNull()
   })
 })

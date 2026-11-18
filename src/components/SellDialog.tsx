@@ -27,7 +27,7 @@ export function SellDialog({ item, onClose, onSave }: Props) {
 }
 
 function SellForm({ item, onSave }: { item: Item; onSave: (item: Item) => void }) {
-  const [price, setPrice] = useState(amountText(item.listPrice))
+  const [price, setPrice] = useState(amountText(item.estimatedPrice ?? item.listPrice))
   const [date, setDate] = useState(todayIso())
   const [platform, setPlatform] = useState<Platform>('Vinted')
   const [errors, setErrors] = useState<ItemErrors>({})

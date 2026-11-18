@@ -10,6 +10,7 @@ const base: Item = {
   purchaseDate: '2026-11-01',
   status: 'in_magazzino',
   listPrice: null,
+  estimatedPrice: null,
   salePrice: null,
   saleDate: null,
   platform: null,
@@ -59,6 +60,8 @@ describe('normalizeItem', () => {
   })
   it('clears the list price once sold', () => {
     expect(normalizeItem({ ...base, status: 'venduto', listPrice: 400 }).listPrice).toBeNull()
+    expect(normalizeItem({ ...base, status: 'in_magazzino', estimatedPrice: 350 }).estimatedPrice).toBe(350)
+    expect(normalizeItem({ ...base, status: 'tenuto', estimatedPrice: 350 }).estimatedPrice).toBeNull()
   })
 })
 
@@ -69,6 +72,10 @@ describe('parseRegistry', () => {
   it('round-trips a valid register', () => {
     const reg = { version: 1, items: [base] }
     expect(parseRegistry(JSON.stringify(reg))).toEqual(reg)
+  })
+  it('reads files written before the estimated value existed', () => {
+    const { estimatedPrice: _, ...old } = base
+    expect(parseRegistry(JSON.stringify({ version: 1, items: [old] })).items[0].estimatedPrice).toBeNull()
   })
   it('rejects malformed content', () => {
     expect(() => parseRegistry('{')).toThrow('JSON')
@@ -82,7 +89,7 @@ describe('itemsToCsv', () => {
     const csv = itemsToCsv([{ ...base, name: 'Lumix; "gh5"', status: 'venduto', salePrice: 400.5, saleDate: '2026-11-05', platform: 'Vinted' }])
     const [header, row] = csv.slice(1).split('\r\n')
     expect(csv.startsWith('﻿')).toBe(true)
-    expect(header.split(';')).toHaveLength(9)
-    expect(row).toBe('"Lumix; ""gh5""";Venduto;319,00;2026-11-01;;400,50;2026-11-05;Vinted;81,50')
+    expect(header.split(';')).toHaveLength(10)
+    expect(row).toBe('"Lumix; ""gh5""";Venduto;319,00;2026-11-01;;;400,50;2026-11-05;Vinted;81,50')
   })
 })

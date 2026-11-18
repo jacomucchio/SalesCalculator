@@ -6,7 +6,7 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { Choice } from '@/components/Choice'
 import { isValid, normalizeItem, parseEuro, validateItem, type ItemErrors } from '@/domain/item'
 import { itemProfit } from '@/domain/stats'
-import { PLATFORMS, STATUSES, STATUS_LABELS, type Item, type Platform, type Status } from '@/domain/types'
+import { PLATFORMS, STATUSES, STATUS_LABELS, UNSOLD_STATUSES, type Item, type Platform, type Status } from '@/domain/types'
 import { amountText, eurSigned, profitClass, todayIso } from '@/lib/format'
 
 const STATUS_OPTIONS = STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] }))
@@ -18,6 +18,7 @@ interface Draft {
   purchaseDate: string
   status: Status
   listPrice: string
+  estimatedPrice: string
   salePrice: string
   saleDate: string
   platform: Platform
@@ -29,6 +30,7 @@ const toDraft = (i: Item): Draft => ({
   purchaseDate: i.purchaseDate ?? '',
   status: i.status,
   listPrice: amountText(i.listPrice),
+  estimatedPrice: amountText(i.estimatedPrice),
   salePrice: amountText(i.salePrice),
   saleDate: i.saleDate ?? '',
   platform: i.platform ?? 'Vinted',
@@ -45,6 +47,7 @@ function fromDraft(base: Item, d: Draft): Item {
     purchaseDate: d.purchaseDate || null,
     status: d.status,
     listPrice: amount(d.listPrice),
+    estimatedPrice: amount(d.estimatedPrice),
     salePrice: amount(d.salePrice),
     saleDate: saleDate || null,
     platform: d.platform,
@@ -110,10 +113,17 @@ function ItemForm({ item, isNew, onSave }: { item: Item; isNew: boolean; onSave:
           <Choice id="status" value={draft.status} options={STATUS_OPTIONS} onChange={(v) => set('status', v)} />
         </Field>
 
-        {draft.status === 'in_vendita' && (
-          <Field id="listPrice" label="Prezzo annuncio (€)" error={errors.listPrice} hint="Facoltativo, per il profitto potenziale">
-            <Input id="listPrice" inputMode="decimal" value={draft.listPrice} onChange={(e) => set('listPrice', e.target.value)} placeholder="0,00" />
-          </Field>
+        {UNSOLD_STATUSES.includes(draft.status) && (
+          <div className="grid grid-cols-2 gap-3">
+            <Field id="estimatedPrice" label="Valore stimato (€)" error={errors.estimatedPrice} hint="Quanto pensi di incassare">
+              <Input id="estimatedPrice" inputMode="decimal" value={draft.estimatedPrice} onChange={(e) => set('estimatedPrice', e.target.value)} placeholder="0,00" />
+            </Field>
+            {draft.status === 'in_vendita' && (
+              <Field id="listPrice" label="Prezzo annuncio (€)" error={errors.listPrice} hint="Facoltativo">
+                <Input id="listPrice" inputMode="decimal" value={draft.listPrice} onChange={(e) => set('listPrice', e.target.value)} placeholder="0,00" />
+              </Field>
+            )}
+          </div>
         )}
 
         {draft.status === 'venduto' && (

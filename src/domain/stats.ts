@@ -21,6 +21,15 @@ export function isUnsold(item: Item): boolean {
   return UNSOLD_STATUSES.includes(item.status)
 }
 
+/**
+ * What an unsold item is expected to fetch: the estimated value if set, otherwise the asking
+ * price of an item on sale. Null for sold/kept items or when neither is known.
+ */
+export function expectedSalePrice(item: Item): number | null {
+  if (!isUnsold(item)) return null
+  return item.estimatedPrice ?? (item.status === 'in_vendita' ? item.listPrice : null)
+}
+
 export interface Summary {
   /** Sum of (sale − purchase) over sold items */
   realizedProfit: number
@@ -30,8 +39,12 @@ export interface Summary {
   cashBalance: number
   /** Purchase cost of unsold items (always current, never filtered by year) */
   inventoryValue: number
-  /** Sum of (list − purchase) over items on sale with a list price */
+  /** Sum of expected sale prices over unsold items that have one */
+  expectedValue: number
+  /** Sum of (expected − purchase) over unsold items with an expected sale price */
   potentialProfit: number
+  /** Unsold items with neither an estimated value nor a list price */
+  unvaluedCount: number
   soldCount: number
   stockCount: number
   /** realizedProfit / sales of sold items, in %; null when nothing sold */
@@ -49,6 +62,7 @@ export function computeSummary(items: Item[], year?: number): Summary {
   const sold = items.filter((i) => i.status === 'venduto' && inYear(i.saleDate))
   const bought = items.filter((i) => inYear(i.purchaseDate))
   const unsold = items.filter(isUnsold)
+  const valued = unsold.filter((i) => expectedSalePrice(i) !== null)
 
   const realizedProfit = sum(sold.map((i) => itemProfit(i) ?? 0))
   const soldSales = sum(sold.map((i) => i.salePrice ?? 0))
@@ -61,9 +75,9 @@ export function computeSummary(items: Item[], year?: number): Summary {
     totalSales: soldSales,
     cashBalance: round2(soldSales - totalPurchases),
     inventoryValue: sum(unsold.map((i) => i.purchasePrice)),
-    potentialProfit: sum(
-      unsold.filter((i) => i.status === 'in_vendita' && i.listPrice !== null).map((i) => i.listPrice! - i.purchasePrice),
-    ),
+    expectedValue: sum(valued.map((i) => expectedSalePrice(i)!)),
+    potentialProfit: sum(valued.map((i) => expectedSalePrice(i)! - i.purchasePrice)),
+    unvaluedCount: unsold.length - valued.length,
     soldCount: sold.length,
     stockCount: unsold.length,
     avgMarginPct: soldSales > 0 ? round2((realizedProfit / soldSales) * 100) : null,

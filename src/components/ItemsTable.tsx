@@ -133,7 +133,10 @@ export function ItemsTable({ items, onEdit, onSell, onDelete }: Props) {
                   <TableCell>
                     <Badge className={STATUS_STYLE[i.status]}>{STATUS_LABELS[i.status]}</Badge>
                     {i.status === 'in_vendita' && i.listPrice !== null && (
-                      <span className="ml-2 text-xs text-muted-foreground tabular-nums">{eur(i.listPrice)}</span>
+                      <span className="ml-2 text-xs text-muted-foreground tabular-nums" title="Prezzo annuncio">{eur(i.listPrice)}</span>
+                    )}
+                    {i.estimatedPrice !== null && (
+                      <span className="ml-2 text-xs text-muted-foreground tabular-nums" title="Valore stimato">≈ {eur(i.estimatedPrice)}</span>
                     )}
                   </TableCell>
                   <TableCell className="tabular-nums">{dateIt(i.purchaseDate)}</TableCell>

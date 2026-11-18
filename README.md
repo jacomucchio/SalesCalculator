@@ -23,6 +23,7 @@ Il file è un JSON leggibile:
 
 - `status`: `in_magazzino`, `in_vendita`, `venduto`, `tenuto`
 - `purchasePrice`: totale pagato, tutto compreso. `salePrice`: quanto è stato incassato.
+- `estimatedPrice`: valore stimato di vendita, per gli articoli in magazzino o in vendita (facoltativo; i file più vecchi senza questo campo si aprono lo stesso).
 - `imported: true`: righe importate dal vecchio Excel, per le quali le date sono facoltative.
 
 **Esporta CSV** crea un file apribile in Excel (separatore `;`, decimali con la virgola).
@@ -33,8 +34,8 @@ Il file è un JSON leggibile:
 |---|---|
 | Profitto realizzato | Σ (vendita − acquisto), solo articoli venduti |
 | Saldo di cassa | totale vendite − totale acquisti (tutti gli articoli) |
-| Valore inventario | costo degli articoli in magazzino / in vendita |
-| Profitto potenziale | Σ (prezzo annuncio − acquisto), articoli in vendita con prezzo annuncio |
+| Valore inventario | costo degli articoli in magazzino / in vendita (con il valore stimato totale) |
+| Profitto potenziale | Σ (valore atteso − acquisto) sugli articoli non venduti; valore atteso = valore stimato, altrimenti prezzo annuncio |
 
 Con il filtro per anno, gli acquisti si contano per data di acquisto e le vendite per data di vendita; l'inventario è sempre quello attuale.
 
