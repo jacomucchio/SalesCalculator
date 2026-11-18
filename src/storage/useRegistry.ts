@@ -34,7 +34,8 @@ export function useRegistry() {
 
   useEffect(() => {
     if (configError) return
-    let userId: string | null = null
+    // undefined = no auth event seen yet, so the first event (even "signed out") is always handled.
+    let userId: string | null | undefined = undefined
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       const id = session?.user.id ?? null
       setUserEmail(session?.user.email ?? null)
