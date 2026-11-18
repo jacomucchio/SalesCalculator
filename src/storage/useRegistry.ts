@@ -1,112 +1,116 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Item, Registry } from '@/domain/types'
-import {
-  forgetHandle,
-  getRememberedHandle,
-  hasPermission,
-  isFileApiSupported,
-  pickExistingFile,
-  pickNewFile,
-  readRegistry,
-  writeRegistry,
-} from './fileStore'
+import { parseRegistry } from '@/domain/item'
+import type { Item } from '@/domain/types'
+import { fetchItems, importItems, removeItem, saveItem } from './remoteStore'
+import { configError, supabase } from './supabase'
 
-export type Phase = 'loading' | 'unsupported' | 'no-file' | 'needs-permission' | 'ready'
+export type Phase = 'loading' | 'signed-out' | 'ready'
 export type SaveState = 'saved' | 'saving' | 'error'
 
+const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
+
 export function useRegistry() {
-  const [phase, setPhase] = useState<Phase>(() => (isFileApiSupported() ? 'loading' : 'unsupported'))
+  const [phase, setPhase] = useState<Phase>(configError ? 'signed-out' : 'loading')
   const [items, setItems] = useState<Item[]>([])
-  const [fileName, setFileName] = useState<string | null>(null)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<SaveState>('saved')
-  const [error, setError] = useState<string | null>(null)
-  const handle = useRef<FileSystemFileHandle | null>(null)
+  const [error, setError] = useState<string | null>(configError)
   const writes = useRef<Promise<void>>(Promise.resolve())
   const itemsRef = useRef<Item[]>([])
 
-  const load = (h: FileSystemFileHandle, reg: Registry) => {
-    handle.current = h
-    setFileName(h.name)
-    itemsRef.current = reg.items
-    setItems(reg.items)
-    setError(null)
-    setPhase('ready')
-  }
-
-  const fail = (e: unknown) => setError(e instanceof Error ? e.message : String(e))
-
-  useEffect(() => {
-    if (!isFileApiSupported()) return
-    getRememberedHandle().then(async (h) => {
-      if (!h) return setPhase('no-file')
-      handle.current = h
-      setFileName(h.name)
-      if (await hasPermission(h, false)) {
-        try {
-          load(h, await readRegistry(h))
-        } catch (e) {
-          fail(e)
-          setPhase('no-file')
-        }
-      } else setPhase('needs-permission')
-    })
-  }, [])
-
-  /** Re-grants access to the remembered file (needs a user click). */
-  const reopen = useCallback(async () => {
-    const h = handle.current
-    if (!h) return
-    try {
-      if (!(await hasPermission(h, true))) return
-      load(h, await readRegistry(h))
-    } catch (e) {
-      fail(e)
-    }
-  }, [])
-
-  const pickWith = useCallback(async (pick: typeof pickExistingFile) => {
-    try {
-      const res = await pick()
-      if (res) load(res.handle, res.registry)
-    } catch (e) {
-      fail(e)
-    }
-  }, [])
-  const openFile = useCallback(() => pickWith(pickExistingFile), [pickWith])
-  const createFile = useCallback(() => pickWith(pickNewFile), [pickWith])
-
-  const closeFile = useCallback(async () => {
-    await forgetHandle()
-    handle.current = null
-    setFileName(null)
-    itemsRef.current = []
-    setItems([])
-    setPhase('no-file')
-  }, [])
-
-  /** Applies a change and writes the whole register to disk, serialising writes. */
-  const mutate = useCallback((fn: (items: Item[]) => Item[]) => {
-    const next = fn(itemsRef.current)
+  const show = (next: Item[]) => {
     itemsRef.current = next
     setItems(next)
-    const h = handle.current
-    if (!h) return
-    setSaveState('saving')
-    writes.current = writes.current
-      .then(() => writeRegistry(h, { version: 1, items: next }))
-      .then(() => setSaveState('saved'))
-      .catch((e) => {
-        setSaveState('error')
-        fail(e)
-      })
+  }
+
+  const reload = useCallback(async () => {
+    try {
+      show(await fetchItems())
+      setError(null)
+    } catch (e) {
+      setError(message(e))
+    }
   }, [])
+
+  useEffect(() => {
+    if (configError) return
+    let userId: string | null = null
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      const id = session?.user.id ?? null
+      setUserEmail(session?.user.email ?? null)
+      if (id === userId) return // token refresh etc.: nothing to reload
+      userId = id
+      if (!id) {
+        show([])
+        setPhase('signed-out')
+        return
+      }
+      // Supabase advises against awaiting other Supabase calls inside this callback.
+      setTimeout(() => {
+        setPhase('loading')
+        reload().then(() => setPhase('ready'))
+      }, 0)
+    })
+    return () => data.subscription.unsubscribe()
+  }, [reload])
+
+  const signIn = useCallback(async (email: string, password: string) => {
+    setError(null)
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) setError(error.message === 'Invalid login credentials' ? 'Email o password errati' : error.message)
+  }, [])
+
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut()
+  }, [])
+
+  /** Applies a change locally right away, then runs the remote write (serialised). On failure reloads from the server. */
+  const mutate = useCallback(
+    (fn: (items: Item[]) => Item[], write: () => Promise<void>) => {
+      show(fn(itemsRef.current))
+      setSaveState('saving')
+      writes.current = writes.current
+        .then(write)
+        .then(() => setSaveState('saved'))
+        .catch(async (e) => {
+          setSaveState('error')
+          setError(message(e))
+          show(await fetchItems().catch(() => itemsRef.current))
+        })
+    },
+    [],
+  )
 
   const upsertItem = useCallback(
     (item: Item) =>
-      mutate((prev) => (prev.some((i) => i.id === item.id) ? prev.map((i) => (i.id === item.id ? item : i)) : [...prev, item])),
+      mutate(
+        (prev) => (prev.some((i) => i.id === item.id) ? prev.map((i) => (i.id === item.id ? item : i)) : [...prev, item]),
+        () => saveItem(item),
+      ),
     [mutate],
   )
-  const deleteItem = useCallback((id: string) => mutate((prev) => prev.filter((i) => i.id !== id)), [mutate])
+  const deleteItem = useCallback(
+    (id: string) => mutate((prev) => prev.filter((i) => i.id !== id), () => removeItem(id)),
+    [mutate],
+  )
 
-  return { phase, items, fileName, saveState, error, openFile, createFile, reopen, closeFile, upsertItem, deleteItem }
+  /** Imports the items of a register JSON file (the old local format). Returns how many were imported. */
+  const importJson = useCallback(
+    async (file: File): Promise<number> => {
+      const { items: imported } = parseRegistry(await file.text())
+      setSaveState('saving')
+      try {
+        await importItems(imported)
+        setSaveState('saved')
+      } catch (e) {
+        setSaveState('error')
+        throw e
+      }
+      await reload()
+      return imported.length
+    },
+    [reload],
+  )
+
+  return { phase, items, userEmail, saveState, error, signIn, signOut, upsertItem, deleteItem, importJson }
 }
